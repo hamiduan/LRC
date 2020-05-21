@@ -1,0 +1,520 @@
+% This Linear Regression-based Classification for Face Recognition
+%       developed based on the paper "Linear Regression for Face Recognition",
+%       whose author are Imran Naseem, Roberto Togneri, Senior Member, IEEE, and Mohammed Bennamoun.
+%       Meanwhile, some part of algorithm are refered from Internet and
+%       modified for the paper.
+% This algorithm is only used for individual study and project.
+% This procedure could only handle 5*10 image numbers, which contains 5
+% test images and 5 training images each categories
+function varargout = Group13Project(varargin)
+% Group13Project MATLAB code for Group13Project.fig
+%      Group13Project, by itself, creates a new Group13Project or raises the existing
+%      singleton*.
+%
+%      H = Group13Project returns the handle to a new Group13Project or the handle to
+%      the existing singleton*.
+%
+%      Group13Project('CALLBACK',hObject,eventData,handles,...) calls the local
+%      function named CALLBACK in Group13Project.M with the given input arguments.
+%
+%      Group13Project('Property','Value',...) creates a new Group13Project or raises the
+%      existing singleton*.  Starting from the left, property value pairs are
+%      applied to the GUI before Group13Project_OpeningFcn gets called.  An
+%      unrecognized property name or invalid value makes property application
+%      stop.  All inputs are passed to Group13Project_OpeningFcn via varargin.
+%
+%      *See GUI Options on GUIDE's Tools menu.  Choose "GUI allows only one
+%      instance to run (singleton)".
+%
+% See also: GUIDE, GUIDATA, GUIHANDLES
+
+% Edit the above text to modify the response to help Group13Project
+
+% Last Modified by GUIDE v2.5 24-May-2019 14:45:32
+
+% Begin initialization code - DO NOT EDIT
+gui_Singleton = 1;
+gui_State = struct('gui_Name',       mfilename, ...
+                   'gui_Singleton',  gui_Singleton, ...
+                   'gui_OpeningFcn', @Group13Project_OpeningFcn, ...
+                   'gui_OutputFcn',  @Group13Project_OutputFcn, ...
+                   'gui_LayoutFcn',  [] , ...
+                   'gui_Callback',   []);
+if nargin && ischar(varargin{1})
+    gui_State.gui_Callback = str2func(varargin{1});
+end
+
+if nargout
+    [varargout{1:nargout}] = gui_mainfcn(gui_State, varargin{:});
+else
+    gui_mainfcn(gui_State, varargin{:});
+end
+% End initialization code - DO NOT EDIT
+
+function img = setImage(hObject, handles, img)
+    % Convert image to greyscale if necessary.
+    if ndims(img) == 3
+        img = rgb2gray(img);
+    end
+    
+    % In the paper images are resized to 10x5 
+    img_resize = imresize(img, handles.SampleSpace);
+
+    % Initialize the columns, reshape images to doubles
+    column_length = prod(handles.SampleSpace);
+    img_double = double(reshape(img_resize, column_length, 1));
+    % Normalise images
+    img = img_double / max(img_double);
+
+    
+% --- Executes just before Group13Project is made visible.
+function Group13Project_OpeningFcn(hObject, eventdata, handles, varargin)
+% This function has no output args, see OutputFcn.
+% hObject    handle to figure
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+% varargin   command line arguments to Group13Project (see VARARGIN)
+
+% Choose default command line output for Group13Project
+handles.output = hObject;
+
+% Setup parameters
+handles.path = uigetdir();
+handles.exit = false;
+handles.SampleSpace = [10 5];
+handles.imagenum = 10;
+handles.trainingamount = 5; 
+handles.testnum = handles.imagenum - handles.trainingamount;
+
+
+% Setup Image datasets
+[trainingfile,  testfile, trainingimg, testimg ,category] = ImportImage(hObject, handles);
+handles.trainingimg = trainingimg;
+handles.testimg = testimg;
+handles.trainingfile = trainingfile;
+handles.testfile = testfile;
+handles.category = category;
+
+% Hat Matrix Parameters
+Hat = HatMat(hObject, handles); 
+handles.Hat = Hat;
+% Get the accuracy and show the pictures
+rate(hObject, handles);
+
+% Update handles structure
+guidata(hObject, handles);
+
+
+
+
+% --- Outputs from this function are returned to the command line.
+function varargout = Group13Project_OutputFcn(hObject, eventdata, handles) 
+% varargout  cell array for returning output args (see VARARGOUT);
+% hObject    handle to figure
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Get default command line output from handles structure
+varargout{1} = handles.output;
+
+function [trainingfile, testfile,trainingimg, testimg ,category] = ImportImage(hObject, handles);
+
+    category = dir(handles.path); % category 12*1 struct array with fields
+    isdir = [category.isdir]; % 1 if name is a folder; 0 if name is a file
+
+    category = {category(isdir).name}; % '.' '..' represent current folder and upper catalogue
+    category(ismember(category, {'.', '..'})) = [] ;
+ 
+    column_length = prod(handles.SampleSpace); % 5*10 = 50
+
+    % Setup space for test and training images
+    trainingimg = zeros(column_length, handles.trainingamount, length(category));
+    testimg = zeros(column_length, handles.testnum, length(category));
+    trainingfile = repmat({''}, handles.trainingamount, length(category));
+    testfile = repmat({''}, handles.testnum, length(category));
+    
+    % i is the number of category; j is the index of images
+    for i = randperm(length(category))
+        imageFolder = strcat(handles.path, '/', category{i});
+        images = [dir(strcat(imageFolder, '/', '*.pgm')); dir(strcat(imageFolder, '/', '*.jpg'))];
+        isdir = [images.isdir];
+        images = {images(~isdir).name};
+        ImgNo = handles.imagenum;
+        TraNo = handles.trainingamount;
+        m = 1;
+        % For 10 imagenum p=(1,5) is training images, p=(6,10) is test images
+        
+        % Get random number from all the images
+        for j = randperm(ImgNo)
+            imageFile = strcat(imageFolder, '/', images{j});
+
+            % Initialize the image.
+            img = setImage(hObject, handles, imread(imageFile));
+
+            % Transform each image into a column and save as a variable.
+            if m <= TraNo
+                trainingimg(:, m, i) = img;
+                trainingfile{m, i} = imageFile; % p is numbers of training
+            else
+                testimg(:, m - TraNo, i) = img;
+                testfile{m - TraNo, i} = imageFile; 
+            end
+            m = m + 1;
+        end
+    end
+ 
+    
+
+function Hat = HatMat(hObject, handles)
+% Compute the Hat algorithm described in the paper
+    space = handles.SampleSpace;
+    category = handles.category;
+    Img_Length = prod(space); % product of SampleSpace
+
+    type_num= length(category); 
+    Hat = zeros(Img_Length, Img_Length, type_num);
+
+    for i = 1 : type_num
+
+      Xi = handles.trainingimg(:,:,i);
+      Hat(:,:,i) = Xi / (Xi' * Xi) * Xi';
+    end
+   
+function [minDist, Estimated] = Image_Category(hObject, handles, img)
+    % Calculate each categories distance measure between the Estimated
+    % response vector
+    category = handles.category;
+    distance = zeros(length(category), 1);  
+    for i = 1 : length(distance)
+        distance(i) = sum((img - handles.Hat(:,:,i) * img) .^ 2);
+    end
+
+    % Calculate the index of the mindist.
+
+    [minDist, Estimated] = min(distance);
+
+    
+function accurate = rate(hObject, handles)
+    Rightnumber = 0;
+    numTotal = handles.testnum * length(handles.category);
+
+    for i = 1 : length(handles.category)
+        for j = 1 : handles.testnum
+            
+            % Display the original class.
+            axes(handles.testoutput);
+            imshow(imread(handles.testfile{j, i})); % i is number of category ; j is number of testimg j.pgm
+            set(handles.test_category_text, 'String', handles.category{i});
+            % min Distance calculate
+            [minDist, Estimated] = Image_Category(hObject, handles, handles.testimg(:, j, i));
+  
+            % Display the Estimated class and distance.
+            
+            axes(handles.trainingoutput);
+            imshow(imread(handles.trainingfile{1, Estimated}));
+            set(handles.training_category_text, 'String', handles.category{Estimated});
+            set(handles.Distance_text, 'String', sprintf('%.6f', minDist));
+                % If found the estimated image pause for 0.2s in order to
+                % display
+            if i == Estimated
+                set(handles.result, 'String',sprintf('Found!'));
+                trafile = strcat(handles.trainingfile{1,Estimated});
+                [filepath,name,ext] = fileparts(trafile);
+                trafilename = name;
+                traext = ext;
+                
+                set(handles.Trainingname, 'String', sprintf('%s',trafilename,traext));
+                pause(0.01);
+                    
+            else
+                
+                set(handles.result, 'String',sprintf('Looking for...'));
+                pause(0.01);
+                
+            end
+            
+
+            if Estimated == i
+                Rightnumber = Rightnumber + 1;
+            end
+        end
+    end
+
+    % Display the overall recognition accuracy.
+    accurate = Rightnumber * 100.0 / numTotal;
+    set(handles.rate_text, 'String', sprintf('%.2f%% (%d/%d)', accurate, Rightnumber, numTotal));
+
+% --- Executes on button press in import.
+
+
+% --- Executes on button press in Activate.
+function Activate_Callback(hObject, eventdata, handles)
+% hObject    handle to Activate (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+% Choose default command line output for Group13Project
+handles.output = hObject;
+
+handles.path =uigetdir();
+handles.exit = false;
+% Exit cleanly if no folder chosen
+if isequal(handles.path, 0)
+    handles.exit = true;
+    guidata(hObject, handles);
+    return
+end
+
+% Input new Images
+[trainingfile,  testfile, trainingimg, testimg ,category] = ImportImage(hObject, handles);
+handles.traningimg = trainingimg;
+handles.testimg = testimg;
+handles.trainingfile = trainingfile;
+handles.testfile = testfile;
+handles.category = category;
+
+% Hat Matrix Parameters
+Hat = HatMat(hObject, handles);
+handles.Hat = Hat;
+rate(hObject, handles);
+
+% Update handles structure
+guidata(hObject, handles);
+
+
+
+function test_category_text_Callback(hObject, eventdata, handles)
+% hObject    handle to test_category_text (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of test_category_text as text
+%        str2double(get(hObject,'String')) returns contents of test_category_text as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function test_category_text_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to test_category_text (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+
+function training_category_text_Callback(hObject, eventdata, handles)
+% hObject    handle to training_category_text (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of training_category_text as text
+%        str2double(get(hObject,'String')) returns contents of training_category_text as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function training_category_text_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to training_category_text (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+function rate_text_Callback(hObject, eventdata, handles)
+% hObject    handle to rate_text (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of rate_text as text
+%        str2double(get(hObject,'String')) returns contents of rate_text as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function rate_text_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to rate_text (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+function labelTraining_Callback(hObject, eventdata, handles)
+% hObject    handle to labelTraining (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of labelTraining as text
+%        str2double(get(hObject,'String')) returns contents of labelTraining as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function labelTraining_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to labelTraining (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+% --- Executes during object creation, after setting all properties.
+function testoutput_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to testoutput (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: place code in OpeningFcn to populate testoutput
+
+
+
+function Distance_text_Callback(hObject, eventdata, handles)
+% hObject    handle to Distance_text (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of Distance_text as text
+%        str2double(get(hObject,'String')) returns contents of Distance_text as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function Distance_text_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to Distance_text (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+
+function result_Callback(hObject, eventdata, handles)
+% hObject    handle to result (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of result as text
+%        str2double(get(hObject,'String')) returns contents of result as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function result_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to result (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+
+function testnumber_Callback(hObject, eventdata, handles)
+% hObject    handle to testnumber (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of testnumber as text
+%        str2double(get(hObject,'String')) returns contents of testnumber as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function testnumber_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to testnumber (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+% --- Executes during object creation, after setting all properties.
+function trainingoutput_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to trainingoutput (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: place code in OpeningFcn to populate trainingoutput
+
+
+% --- Executes during object creation, after setting all properties.
+function Activate_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to Activate (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+
+% --- Executes during object creation, after setting all properties.
+function text5_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to text5 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+
+% --- Executes during object creation, after setting all properties.
+function text6_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to text6 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+
+% --- Executes during object deletion, before destroying properties.
+function text6_DeleteFcn(hObject, eventdata, handles)
+% hObject    handle to text6 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+
+% --- Executes during object deletion, before destroying properties.
+function text5_DeleteFcn(hObject, eventdata, handles)
+% hObject    handle to text5 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+
+
+function Trainingname_Callback(hObject, eventdata, handles)
+% hObject    handle to Trainingname (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of Trainingname as text
+%        str2double(get(hObject,'String')) returns contents of Trainingname as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function Trainingname_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to Trainingname (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+
+
